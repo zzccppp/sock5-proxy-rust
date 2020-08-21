@@ -1,6 +1,7 @@
 use tokio::net::TcpStream;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6, Ipv6Addr, IpAddr};
 use tokio::io::{AsyncReadExt, Error, ErrorKind, AsyncWriteExt};
+use tokio::join;
 use crate::socks5::errors::{UnexpectedSocksVersionError, UnexpectedDataError};
 
 fn get_address(buf: &[u8]) -> std::io::Result<String> {
@@ -61,7 +62,7 @@ pub async fn request_handler(mut socket: TcpStream, ad: &SocketAddr, local_addr:
             //CONNECT REQUEST
             let addr_string = get_address(&buf)?;
             println!("{}", addr_string);
-            let mut target_stream = match TcpStream::connect(addr_string).await {
+            let target_stream = match TcpStream::connect(addr_string.clone()).await {
                 Ok(e) => {
                     e
                 }
@@ -87,13 +88,13 @@ pub async fn request_handler(mut socket: TcpStream, ad: &SocketAddr, local_addr:
 
             //Start forwarding data
 
-            println!("--start--");
+            println!("Start forwarding Data between {} and {}", addr_string, ad);
 
             let (mut local_read, mut local_write) = socket.into_split();
             let (mut remote_read, mut remote_write) = target_stream.into_split();
 
             let t1 = tokio::spawn(async move {
-                let mut buf1 = [0u8; 512];
+                let mut buf1 = [0u8; 4096];
                 let mut n = local_read.read(&mut buf1).await.unwrap();
                 while n != 0 {
                     remote_write.write(&mut buf1[0..n]).await.unwrap();
@@ -102,7 +103,7 @@ pub async fn request_handler(mut socket: TcpStream, ad: &SocketAddr, local_addr:
             });
 
             let t2 = tokio::spawn(async move {
-                let mut buf1 = [0u8; 512];
+                let mut buf1 = [0u8; 4096];
                 let mut n = remote_read.read(&mut buf1).await.unwrap();
                 while n != 0 {
                     local_write.write(&mut buf1[0..n]).await.unwrap();
@@ -110,7 +111,14 @@ pub async fn request_handler(mut socket: TcpStream, ad: &SocketAddr, local_addr:
                 }
             });
 
-            println!("--end--");
+            let (r1, r2) = join!(t1,t2);
+            match r1 {
+                _ => {}
+            }
+            match r2 {
+                _ => {}
+            }
+            println!("End forwarding Data between {} and {}", addr_string, ad);
         }
         2 => {
             //todo bind

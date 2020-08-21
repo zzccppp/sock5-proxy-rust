@@ -86,6 +86,11 @@ pub async fn sub_negotiation(socket: &mut TcpStream, ad: &SocketAddr, method: Id
         }
         IdentifierMethod::Username => {
             //todo username auth
+
+            let mut buf = [0u8; 512];
+            let n = socket.read(&mut buf).await?;
+
+            socket.write(&[5, 0]).await?;//auth successful
             Ok(())
         }
         IdentifierMethod::Unsupported => {
